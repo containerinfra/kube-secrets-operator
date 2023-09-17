@@ -1,0 +1,6 @@
+deployment:
+  image:
+    repository: ghcr.io/containerinfra
+    name: kube-secrets-operator
+  imagePullSecrets: []
+  # - name: myRegistreKeySecretName

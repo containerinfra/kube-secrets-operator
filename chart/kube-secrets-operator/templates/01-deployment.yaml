@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kube-secrets-operator
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: kube-secrets-operator
+spec:
+  selector:
+    matchLabels:
+      app: kube-secrets-operator
+  template:
+    metadata:
+      labels:
+        app: kube-secrets-operator
+    spec:
+      serviceAccountName: kube-secrets-operator
+      restartPolicy: Always
+      enableServiceLinks: false
+      automountServiceAccountToken: true
+      securityContext:
+        runAsNonRoot: true
+        runAsGroup: 65532
+        runAsUser: 65532
+        fsGroup: 65532
+      {{- with .Values.deployment.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: controller
+          image: "{{ .Values.deployment.image.repository }}/{{ .Values.deployment.image.name }}:{{ .Chart.AppVersion }}"
+          ports:
+            - name: metrics
+              containerPort: 8080
+            - name: health
+              containerPort: 8081
+          resources:
+            requests:
+              memory: 100M
+              cpu: '0.1'
+            limits:
+              memory: 100M
+              cpu: '0.5'
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ['ALL']
