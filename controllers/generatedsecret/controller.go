@@ -96,6 +96,7 @@ func (r *GeneratedSecretReconciler) SetupWithManager(mgr ctrl.Manager) error {
 				return true
 			},
 			UpdateFunc: func(event event.UpdateEvent) bool {
+				// TODO: filter out status updates if event.ObjectNew == event.ObjectNew
 				return true
 			},
 			GenericFunc: func(event event.GenericEvent) bool {

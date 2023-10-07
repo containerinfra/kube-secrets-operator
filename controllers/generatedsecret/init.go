@@ -48,12 +48,7 @@ func (r *GeneratedSecretReconciler) initalizeGeneratedSecret(ctx context.Context
 		} else {
 			fmt.Printf("created secret in ns %s/%s %q\n", secret.Namespace, secret.Name, secret.UID)
 		}
-		if secret.GetUID() == "" {
-			r.Recorder.Eventf(&generatedSecret, corev1.EventTypeWarning, "Failed secret uuid compare", "Missing UUID for secret in namespace '%s/%s'", secret.GetNamespace(), secret.GetName())
-		}
-
 		ref := utils.GetGeneratedSecretRef(secret)
-		// logrus.Infof("generatedSecretsRefs: %s in %s with uid %s", ref.Name, ref.Namespace, ref.UID)
 
 		r.Recorder.Eventf(&generatedSecret, corev1.EventTypeNormal, "Created secret", "Created a new secret in namespace '%s'", secret.GetNamespace())
 		generatedSecretsRefs = append(generatedSecretsRefs, ref)
