@@ -9,7 +9,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.3.1
 	github.com/onsi/gomega v1.22.1
 	github.com/pkg/errors v0.9.1
-	github.com/sethvargo/go-password v0.2.0
+	github.com/sethvargo/go-password v0.3.1
 	golang.org/x/crypto v0.39.0
 	k8s.io/api v0.25.3
 	k8s.io/apimachinery v0.25.3
