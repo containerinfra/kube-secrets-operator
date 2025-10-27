@@ -6,6 +6,7 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
+	"errors"
 
 	"golang.org/x/crypto/ssh"
 )
@@ -15,21 +16,22 @@ type SSHKeyTemplate struct {
 
 	// Type of SSH key generated
 	// +optional
-	Type string `json:"type,omitempty"`
-
-	// FileName is an optional attribute to specify the filename of the private and public key generated.
-	// Public key will be FileName + .pub
-	// +optional
-	FileName string `json:"fileName"`
+	Type SSHKeyType `json:"type,omitempty"`
 }
+
+type SSHKeyType string
+
+const (
+	RSAKey SSHKeyType = "rsa"
+)
 
 // GenerateRSAKeyPair makes a pair of public and private keys for SSH access.
 // Public key is encoded in the format for inclusion in an OpenSSH authorized_keys file.
 // Private Key generated is PEM encoded
-func GenerateRSAKeyPair(spec *SSHKeyTemplate) (string, string, error) {
+func GenerateRSAKeyPair(spec SSHKeyTemplate) (string, string, error) {
 	keySize := spec.Size
-	if keySize <= 0 {
-		keySize = 4096
+	if keySize <= 0 { // 4096
+		return "", "", errors.New("invalid key size")
 	}
 
 	privateKey, err := rsa.GenerateKey(rand.Reader, keySize)

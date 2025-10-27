@@ -6,9 +6,9 @@ import (
 
 	generatedsecretv1 "github.com/containerinfra/kube-secrets-operator/api/v1"
 	"github.com/containerinfra/kube-secrets-operator/pkg/utils"
-	"github.com/google/go-cmp/cmp"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -22,6 +22,15 @@ func (r *GeneratedSecretReconciler) validateSpec(o generatedsecretv1.GeneratedSe
 	return nil
 }
 
+// getExpectedSecretKeys returns the list of keys that should exist in the secret data
+func getExpectedSecretKeys(generatedSecret generatedsecretv1.GeneratedSecret) []string {
+	keys := []string{}
+	for key := range generatedSecret.Spec.Template.Data {
+		keys = append(keys, key)
+	}
+	return keys
+}
+
 // ReconcileToSpec manages the lifecycle of secrets after creation and before deletion
 // It will patch secrets with new metadata, and if necessary, will rotate the secrets to new values
 func (r *GeneratedSecretReconciler) reconcileToSpec(ctx context.Context, generatedSecret generatedsecretv1.GeneratedSecret) bool {
@@ -31,9 +40,13 @@ func (r *GeneratedSecretReconciler) reconcileToSpec(ctx context.Context, generat
 	generatedSecretsRefs := []generatedsecretv1.GeneratedSecretRef{}
 
 	for _, secretRef := range generatedSecret.Status.SecretsGeneratedRef.Secrets {
-		secret, err := utils.GetSecretByName(secretRef.Namespace, secretRef.Name)
+		secret := &corev1.Secret{}
+		err := r.Client.Get(ctx, types.NamespacedName{
+			Name:      secretRef.Name,
+			Namespace: secretRef.Namespace,
+		}, secret)
+
 		if err != nil {
-			// TODO: handle more errors
 			if errors.IsNotFound(err) {
 				logger.Info(fmt.Sprintf("A managed resource is deleted: %s/%s @ %s", secretRef.Namespace, secretRef.Name, secretRef.UID))
 				continue
@@ -44,33 +57,87 @@ func (r *GeneratedSecretReconciler) reconcileToSpec(ctx context.Context, generat
 			continue
 		}
 
-		if !cmp.Equal(secret.GetLabels(), generatedSecret.GetSecretLabels()) || !cmp.Equal(secret.GetAnnotations(), generatedSecret.GetSecretAnnotations()) {
-			secret.SetLabels(generatedSecret.GetSecretLabels())
-			secret.SetAnnotations(generatedSecret.GetSecretAnnotations())
-			logger.Info("secret labels or annotations do not match. Updating secret", "secret", secret.GetName())
+		// Check if secret data is missing or empty
+		if len(secret.Data) == 0 {
+			logger.Info("secret data is empty, marking for regeneration", "secret", secret.GetName(), "namespace", secret.GetNamespace())
+			// Remove this secret from refs so it will be recreated in createMissingPasswordSecrets
+			continue
+		}
 
+		// Verify that the secret has all expected data keys from the template
+		expectedKeys := getExpectedSecretKeys(generatedSecret)
+		missingKeys := []string{}
+		for _, key := range expectedKeys {
+			if _, exists := secret.Data[key]; !exists {
+				missingKeys = append(missingKeys, key)
+			}
+		}
+
+		if len(missingKeys) > 0 {
+			logger.Info("secret is missing expected data keys, marking for regeneration", "secret", secret.GetName(), "namespace", secret.GetNamespace(), "missingKeys", missingKeys)
+			// Remove this secret from refs so it will be recreated
+			continue
+		}
+
+		// Prepare expected labels and annotations with ownership labels
+		expectedLabels := generatedSecret.GetSecretLabels()
+		if expectedLabels == nil {
+			expectedLabels = make(map[string]string)
+		}
+		for k, v := range getLabelsForSecret(generatedSecret) {
+			expectedLabels[k] = v
+		}
+
+		expectedAnnotations := generatedSecret.GetSecretAnnotations()
+		if expectedAnnotations == nil {
+			expectedAnnotations = make(map[string]string)
+		}
+
+		labelsEqual := equality.Semantic.DeepEqual(secret.GetLabels(), expectedLabels)
+		annotationsEqual := equality.Semantic.DeepEqual(secret.GetAnnotations(), expectedAnnotations)
+
+		if !labelsEqual || !annotationsEqual {
+			logger.Info("secret labels or annotations do not match. Updating secret", "secret", secret.GetName(), "labelsEqual", labelsEqual, "annotationsEqual", annotationsEqual)
+			secret.SetLabels(expectedLabels)
+			secret.SetAnnotations(expectedAnnotations)
 			err := r.Client.Update(ctx, secret)
 			if err != nil {
 				generatedSecretsRefs = append(generatedSecretsRefs, secretRef)
 				logger.Info(fmt.Sprintf("Failed to reconcile a secret due to k8s api error: %s", err.Error()))
 				continue
 			}
-			newSecretRef := utils.GetGeneratedSecretRef(*secret)
 
+			// Fetch the updated secret to get the latest UID and ResourceVersion
+			updatedSecret := &corev1.Secret{}
+			err = r.Client.Get(ctx, types.NamespacedName{
+				Name:      secret.Name,
+				Namespace: secret.Namespace,
+			}, updatedSecret)
+			if err != nil {
+				logger.Error(err, "failed to fetch updated secret", "secret", secret.GetName())
+				// Use the existing secretRef if we can't fetch the updated one
+				generatedSecretsRefs = append(generatedSecretsRefs, secretRef)
+				continue
+			}
+
+			newSecretRef := utils.GetGeneratedSecretRef(*updatedSecret)
 			generatedSecretsRefs = append(generatedSecretsRefs, newSecretRef)
 
 			updated = true
 		} else {
-			generatedSecretsRefs = append(generatedSecretsRefs, secretRef)
+			// Even when not updating, use the current secret's metadata to ensure UID/ResourceVersion are up to date
+			currentSecretRef := utils.GetGeneratedSecretRef(*secret)
+			generatedSecretsRefs = append(generatedSecretsRefs, currentSecretRef)
 		}
 	}
-	generatedSecret.Status.SecretsGeneratedRef.Secrets = generatedSecretsRefs
 
-	// FetchExistingSecrets(o)
-	err := r.Client.Status().Update(ctx, &generatedSecret)
-	if err != nil {
-		logger.Error(err, "failed to reconcile generated secret")
-		return false
+	if !equality.Semantic.DeepEqual(generatedSecret.Status.SecretsGeneratedRef.Secrets, generatedSecretsRefs) {
+		generatedSecret.Status.SecretsGeneratedRef.Secrets = generatedSecretsRefs
+		err := r.updateStatusOrRetry(ctx, &generatedSecret)
+		if err != nil {
+			logger.Error(err, "failed to reconcile generated secret")
+			return false
+		}
 	}
 
 	return updated
@@ -116,7 +183,7 @@ func (r *GeneratedSecretReconciler) fetchExistingSecrets(ctx context.Context, o 
 			continue
 		}
 
-		if secret.Type != secretRef.Type {
+		if secret.Type != corev1.SecretType(secretRef.Type) {
 			logger.Info(fmt.Sprintf("Secret Type invalid. Found: %s, expected: %s", secret.Type, secretRef.Type))
 			// Should never happen, this means we got a bug in our code or someone manually edited various resources; this should however update the resource version
 			invalidSecrets = append(invalidSecrets, *secret)

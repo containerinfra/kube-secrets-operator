@@ -6,6 +6,7 @@
 *.so
 *.dylib
 bin
+release
 testbin/*
 
 # Test binary, build with `go test -c`
@@ -23,3 +24,10 @@ testbin/*
 *.swp
 *.swo
 *~
+
+.vscode/
+
+
+__debug_bin*
+
+deploy/

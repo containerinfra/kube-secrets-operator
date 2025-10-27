@@ -1,9 +1,26 @@
 package v1
 
 import (
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+)
+
+// Condition types for GeneratedSecret
+const (
+	// ConditionReady indicates that the secret generation is ready and all secrets have been created
+	ConditionReady = "Ready"
+	// ConditionError indicates that there was an error during secret generation
+	ConditionError = "Error"
+)
+
+// Condition reasons
+const (
+	ReasonSecretsGenerated    = "SecretsGenerated"
+	ReasonGenerationFailed    = "GenerationFailed"
+	ReasonTemplateError       = "TemplateError"
+	ReasonInputSecretNotFound = "InputSecretNotFound"
+	ReasonValidationFailed    = "ValidationFailed"
+	ReasonReconciling         = "Reconciling"
 )
 
 type SecretType string
@@ -13,6 +30,13 @@ const (
 	SecretTypeBinary    SecretType = "binary"
 	SecretTypeBasicAuth SecretType = "basic-auth"
 	SecretTypeSSHAuth   SecretType = "ssh-auth"
+)
+
+type DeletionPolicy string
+
+const (
+	DeleteOnCleanup DeletionPolicy = "Delete"
+	RetainOnCleanup DeletionPolicy = "Retain"
 )
 
 // GeneratedSecretSpec defines the desired state of Secret
@@ -27,6 +51,10 @@ type GeneratedSecretSpec struct {
 	// +optional
 	Template SecretTemplate `json:"template"`
 
+	// DeletionPolicy is the policy to be used when the secret is deleted
+	// +kubebuilder:default="Delete"
+	// +optional
+	DeletionPolicy DeletionPolicy `json:"deletionPolicy"`
 	// // SecretRef is an reference to a kubernetes secret that will be created
 	// SecretRef *corev1.SecretReference `json:"passwordSecretRef,omitempty"`
 }
@@ -42,10 +70,10 @@ type SecretMetadata struct {
 	Annotations map[string]string `json:"annotations"`
 
 	// +optional
-	Labels map[string]string `json:"labels"`
+	Labels map[string]string `json:"labels,omitempty"`
 
 	// +optional
-	Type corev1.SecretType `json:"type"`
+	Type string `json:"type,omitempty"`
 }
 
 // GetName returns the name of the generated secret
@@ -72,12 +100,57 @@ type SecretTemplate struct {
 	Data SecretValueItems `json:"data"`
 }
 
-type SecretValueItems []SecretValueItemTemplate
+type SecretValueItems map[string]SecretValueItemTemplate
 
 type SecretValueItemTemplate struct {
-	Name string `json:"name"`
+	// Value is a static string value. This is a shorthand for static values.
 	// +optional
+	Value string `json:"value,omitempty"`
+
+	// Static value is a static value that will be used to set the value of the secret
+	// Deprecated: Use Value field instead for simpler syntax
+	// +optional
+	Static *StaticValueSpec `json:"static,omitempty"`
+
+	// Templated value is a value that will be templated using the key-value pairs in the secret
+	// +optional
+	Templated *TemplatedValueSpec `json:"templated,omitempty"`
+
+	// Generated value is a value that will be generated using a random string generator
+	// +optional
+	Generated *GeneratedValueSpec `json:"generated,omitempty"`
+}
+
+type SshKeyValueSpec struct {
+	// Public Key is the public key that will be used to set the value of the secret
+	PublicKey string `json:"publicKey"`
+}
+
+type StaticValueSpec struct {
+	// Value is the static value that will be used to set the value of the secret
 	Value string `json:"value"`
+}
+
+type TemplatedValueSpec struct {
+	// Template is a string that will be templated using the key-value pairs in the secret. This is a go template string.
+	Template string `json:"template"`
+	// Input Secret reference is a reference to a secret that will be used to template the value
+	// The value will be templated using the key-value pairs in the secret
+	// +optional
+	InputSecretRef *SecretReference `json:"inputSecretRef,omitempty"`
+}
+
+// SecretReference represents a reference to a Secret in a specific namespace
+type SecretReference struct {
+	// Name of the secret
+	Name string `json:"name"`
+	// Namespace of the secret. If empty, defaults to the namespace of the GeneratedSecret
+	// +optional
+	Namespace string `json:"namespace,omitempty"`
+}
+
+type GeneratedValueSpec struct {
+	// Lengt of the  generated value
 	// +optional
 	Length uint32 `json:"length,omitempty"`
 
@@ -101,9 +174,26 @@ type SecretValueItemTemplate struct {
 
 // GeneratedSecretStatus defines the observed state of Secret.
 type GeneratedSecretStatus struct {
-	Initalized          bool                `json:"initalized"`
-	Status              string              `json:"status"`
+	// Initalized indicates if the secret has been initialized
+	// Deprecated: Use Conditions instead
+	Initalized bool `json:"initalized"`
+
+	// Status is a human-readable status message
+	// Deprecated: Use Conditions instead
+	Status string `json:"status"`
+
+	// SecretsGeneratedRef contains references to all generated secrets
 	SecretsGeneratedRef GeneratedSecretsRef `json:"secretsGeneratedRef"`
+
+	// Conditions represent the latest available observations of the GeneratedSecret's state
+	// +optional
+	// +listType=map
+	// +listMapKey=type
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
+
+	// SecretsCount is the total number of secrets that have been generated
+	// +optional
+	SecretsCount int `json:"secretsCount,omitempty"`
 }
 
 // GeneratedSecretsRef is a list of references to secrets
@@ -113,15 +203,18 @@ type GeneratedSecretsRef struct {
 
 // GeneratedSecretRef describes a reference to a generated secret by referencing meta data
 type GeneratedSecretRef struct {
-	Name            string            `json:"name"`
-	Type            corev1.SecretType `json:"type"`
-	Namespace       string            `json:"namespace"`
-	ResourceVersion string            `json:"resourceVersion"`
-	UID             types.UID         `json:"uid"`
+	Name            string    `json:"name"`
+	Type            string    `json:"type"`
+	Namespace       string    `json:"namespace"`
+	ResourceVersion string    `json:"resourceVersion"`
+	UID             types.UID `json:"uid"`
 }
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
+//+kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].status`
+//+kubebuilder:printcolumn:name="Secrets",type=integer,JSONPath=`.status.secretsCount`
+//+kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 
 // GeneratedSecret is the Schema for the Secrets API
 type GeneratedSecret struct {
@@ -157,6 +250,18 @@ type GeneratedSecretList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []GeneratedSecret `json:"items"`
+}
+
+// NewCondition creates a new condition for the GeneratedSecret
+func (s *GeneratedSecret) NewCondition(conditionType string, status metav1.ConditionStatus, reason, message string) metav1.Condition {
+	return metav1.Condition{
+		Type:               conditionType,
+		Status:             status,
+		ObservedGeneration: s.Generation,
+		LastTransitionTime: metav1.Now(),
+		Reason:             reason,
+		Message:            message,
+	}
 }
 
 func init() {

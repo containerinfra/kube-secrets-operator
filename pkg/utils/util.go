@@ -16,6 +16,7 @@ func GetAlreadyExistingSecrets(namespaces []string, name string, labels map[stri
 
 	secrets := []*corev1.Secret{}
 	for _, namespace := range namespaces {
+		// TODO: fix
 		s, err := GetSecret(namespace, name, labels)
 		if err == nil {
 			secrets = append(secrets, s)
@@ -71,7 +72,7 @@ func GetGeneratedSecretRef(secret corev1.Secret) generatedsecretv1.GeneratedSecr
 	return generatedsecretv1.GeneratedSecretRef{
 		Name:            secret.GetName(),
 		Namespace:       secret.GetNamespace(),
-		Type:            secret.Type,
+		Type:            string(secret.Type),
 		ResourceVersion: secret.GetResourceVersion(),
 		UID:             secret.GetUID(),
 	}
