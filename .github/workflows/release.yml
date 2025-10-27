@@ -49,7 +49,6 @@ jobs:
         with:
           charts_dir: chart
           config: cr.yaml
-          skip_upload: true
         env:
           CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
           CR_SKIP_EXISTING: "true"
