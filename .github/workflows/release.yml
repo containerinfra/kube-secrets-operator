@@ -62,3 +62,19 @@ jobs:
             fi
             helm push "${pkg}" "oci://ghcr.io/${GITHUB_REPOSITORY_OWNER}/charts"
           done
+      - name: Sign Helm charts with Cosign
+        run: |
+          shopt -s nullglob
+          for pkg in .cr-release-packages/*.tgz; do
+            if [ -z "${pkg:-}" ]; then
+              break
+            fi
+            filename=$(basename "${pkg}")
+            chart_full="${filename%.tgz}"
+            
+            chart_name="${chart_full%-*}"
+            chart_version="${chart_full##*-}"
+            
+            echo "Signing chart: ${chart_name}:${chart_version}"
+            cosign sign --yes "oci://ghcr.io/${GITHUB_REPOSITORY_OWNER}/charts/${chart_name}:${chart_version}"
+          done
