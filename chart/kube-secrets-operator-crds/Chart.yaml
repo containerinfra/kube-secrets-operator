@@ -1,6 +1,6 @@
 apiVersion: v2
-name: kube-secrets-operator
-description: Helm chart for deploying the Kube Secrets Operator
+name: kube-secrets-operator-crds
+description: Helm chart for deploying the Kube Secrets Operator CRDs
 type: application
 version: 1.0.0
 appVersion: "1.0.0"

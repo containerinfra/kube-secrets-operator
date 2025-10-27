@@ -1,0 +1,12 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "kubeSecretsOperator.name" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kubeSecretsOperator.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.minAvailable }}
+  selector:
+    matchLabels:
+    {{- include "kubeSecretsOperator.selectorLabels" . | nindent 6 }}

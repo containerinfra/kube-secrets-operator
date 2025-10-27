@@ -1,49 +1,84 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: kube-secrets-operator
+  name: {{ include "kubeSecretsOperator.name" . }}
   namespace: {{ .Release.Namespace }}
   labels:
-    app: kube-secrets-operator
+  {{- include "kubeSecretsOperator.labels" . | nindent 4 }}
 spec:
+  strategy:
+    type: RollingUpdate
+  {{- if not .Values.hpa.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
   selector:
     matchLabels:
-      app: kube-secrets-operator
+      {{- include "kubeSecretsOperator.selectorLabels" . | nindent 6 }}
   template:
     metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       labels:
-        app: kube-secrets-operator
+        {{- include "kubeSecretsOperator.selectorLabels" . | nindent 8 }}
     spec:
-      serviceAccountName: kube-secrets-operator
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "kubeSecretsOperator.serviceAccountName" . }}
       restartPolicy: Always
       enableServiceLinks: false
       automountServiceAccountToken: true
       securityContext:
-        runAsNonRoot: true
-        runAsGroup: 65532
-        runAsUser: 65532
-        fsGroup: 65532
-      {{- with .Values.deployment.imagePullSecrets }}
-      imagePullSecrets:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
         - name: controller
-          image: "{{ .Values.deployment.image.repository }}/{{ .Values.deployment.image.name }}:{{ .Chart.AppVersion }}"
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+          - /kube-secrets-operator
+          {{- with .Values.extraArgs }}
+          - {{ . | quote }}
+          {{- end }}
+
+          {{- if .Values.leaderElection.enabled }}
+          - --leader-elect=true
+          - --leader-election-id={{ .Values.leaderElection.id | default "kube-secrets-operator.k8s.containerinfra.nl" }}
+          - --leader-election-namespace={{ .Values.leaderElection.namespace | default .Release.Namespace }}
+          {{- end }}
+    
           ports:
             - name: metrics
-              containerPort: 8080
+              containerPort: 7712
             - name: health
-              containerPort: 8081
+              containerPort: 7713
+          volumeMounts:
+            - name: tempdir
+              mountPath: /tmp
           resources:
-            requests:
-              memory: 100M
-              cpu: '0.1'
-            limits:
-              memory: 100M
-              cpu: '0.5'
-          securityContext:
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            capabilities:
-              drop: ['ALL']
+            {{- toYaml .Values.resources | nindent 12 }}
+      livenessProbe:
+        {{- toYaml .Values.livenessProbe | nindent 12 }}
+      readinessProbe:
+        {{- toYaml .Values.readinessProbe | nindent 12 }}
+        
+      volumes:
+        - name: tempdir
+          emptyDir: {}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+

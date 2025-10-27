@@ -1,6 +1,115 @@
-deployment:
-  image:
-    repository: ghcr.io/containerinfra
-    name: kube-secrets-operator
-  imagePullSecrets: []
-  # - name: myRegistreKeySecretName
+# Default values for the kube-secrets-operator.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+image:
+# image used to deploy the kube-secrets-operator
+  repository: ghcr.io/containerinfra/kube-secrets-operator
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: 
+
+# This section specifies the Kubernetes secret that is required to pull the image from the private container registry.
+imagePullSecrets: {}
+
+# The "nameOverride" value allows you to override the default name used when installing the Helm chart.
+# By default, the Helm release name is derived from the name provided during the installation process.
+# If "nameOverride" is not specified or left empty, the Helm release name remains the same as the one
+# provided during installation.
+nameOverride: ""
+# The "fullnameOverride" value makes it possible to customize the full name of the Helm release, which includes the release name
+# and the chart name.
+fullnameOverride: ""
+
+extraArgs: []
+envFrom: []
+
+replicaCount: 1
+minAvailable: 1
+
+service:
+  type: ClusterIP
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+# Pod Annotations for API and API Daemon
+# Use the following annotations to apply metadata and configuration to the pods of the API and the API daemon.
+podAnnotations: {}
+
+podSecurityContext:
+  seccompProfile:
+    type: RuntimeDefault
+  runAsNonRoot: true
+  runAsGroup: 65532
+  runAsUser: 65532
+  fsGroup: 65532
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ['ALL']
+  runAsUser: 65532
+
+resources: {}
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # limits:
+  #   cpu: 100m
+  #   memory: 128Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi
+
+# Use the following settings to configure node affinity, tolerations, and affinity rules for the API and the API daemon
+# Define node labels as key-value pairs to select specific nodes for running the pods of the API and the API daemon.
+# When specified, the pods will be scheduled only on the nodes that match the specified labels.
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+hpa:
+# enable/disable the horizontal pod scaler and define its behaviour
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 4
+  cpu:
+    targetType: Utilization
+    averageUtilization: 90
+
+# enable or disable the deployment of the Service monitor
+enableServiceMonitor: true
+
+
+leaderElection:
+  enabled: false
+  # namespace: kube-secrets-operator
+  # id: kube-secrets-operator.k8s.containerinfra.nl
+
+livenessProbe:
+  httpGet:
+    path: /healthz
+    port: health
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 10
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /readyz
+    port: health
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 10
+  failureThreshold: 3
