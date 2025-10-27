@@ -1,0 +1,15 @@
+# reviewdog.yml
+
+runner:
+  govet:
+    cmd: go vet $(go list ./... | grep -v /.go/)
+    format: govet
+    level: warning
+  gosec:
+    cmd: gosec -quiet -no-fail -fmt golint $(go list ./... | grep -v /.go/)
+    format: golint
+    level: warning
+  staticcheck:
+    cmd: staticcheck -fail none $(go list ./... | grep -v /.go/)
+    errorformat:
+      - "%f:%l:%c: %m"

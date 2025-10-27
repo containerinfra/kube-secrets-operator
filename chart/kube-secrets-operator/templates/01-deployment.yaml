@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "kubeSecretsOperator.name" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+  {{- include "kubeSecretsOperator.labels" . | nindent 4 }}
+spec:
+  strategy:
+    type: RollingUpdate
+  {{- if not .Values.hpa.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "kubeSecretsOperator.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "kubeSecretsOperator.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "kubeSecretsOperator.serviceAccountName" . }}
+      restartPolicy: Always
+      enableServiceLinks: false
+      automountServiceAccountToken: true
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: controller
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+          - /kube-secrets-operator
+          {{- with .Values.extraArgs }}
+          - {{ . | quote }}
+          {{- end }}
+
+          {{- if .Values.leaderElection.enabled }}
+          - --leader-elect=true
+          - --leader-election-id={{ .Values.leaderElection.id | default "kube-secrets-operator.k8s.containerinfra.nl" }}
+          - --leader-election-namespace={{ .Values.leaderElection.namespace | default .Release.Namespace }}
+          {{- end }}
+    
+          ports:
+            - name: metrics
+              containerPort: 7712
+            - name: health
+              containerPort: 7713
+          volumeMounts:
+            - name: tempdir
+              mountPath: /tmp
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      livenessProbe:
+        {{- toYaml .Values.livenessProbe | nindent 12 }}
+      readinessProbe:
+        {{- toYaml .Values.readinessProbe | nindent 12 }}
+        
+      volumes:
+        - name: tempdir
+          emptyDir: {}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+

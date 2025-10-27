@@ -1,0 +1,16 @@
+domain: k8s.containerinfra.com
+layout:
+- go.kubebuilder.io/v3
+projectName: kube-secrets-operator
+repo: github.com/containerinfra/kube-secrets-operator
+resources:
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: k8s.containerinfra.com
+  group: apps
+  kind: DatabaseServer
+  path: github.com/containerinfra/kube-secrets-operator/api/v1
+  version: v1
+version: "3"

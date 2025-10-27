@@ -1,0 +1,8 @@
+apiVersion: v2
+name: kube-secrets-operator
+description: Helm chart for deploying the Kube Secrets Operator
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+sources:
+  - 'https://github.com/containerinfra/kube-secrets-operator'
