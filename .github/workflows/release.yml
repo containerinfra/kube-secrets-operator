@@ -45,7 +45,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Run chart-releaser
-        uses: helm/chart-releaser-action
+        uses: helm/chart-releaser-action@v1.7.0
         with:
           charts_dir: chart
           config: cr.yaml
