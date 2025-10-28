@@ -68,7 +68,7 @@ dist: ./release
 
 # Documentation: https://goreleaser.com/customization/changelog/
 changelog:
-  use: github
+  use: github-native
   sort: asc
   groups:
     - title: 'Dependencies'
