@@ -49,7 +49,7 @@ func (r *GeneratedSecretReconciler) createMissingPasswordSecrets(ctx context.Con
 			}
 			continue
 		}
-		r.Recorder.Eventf(&generatedSecret, corev1.EventTypeNormal, "Created secret", "Created a new secret in namespace '%s'", secret.GetNamespace())
+		r.Recorder.Eventf(&generatedSecret, corev1.EventTypeNormal, "Created secret", "Created a new secret %s/%s", secret.GetNamespace(), secret.GetName())
 
 		// New secret, so simply add it to the secrets ref
 		generatedSecret.Status.SecretsGeneratedRef.Secrets = append(generatedSecret.Status.SecretsGeneratedRef.Secrets, utils.GetGeneratedSecretRef(secret))
