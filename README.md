@@ -19,7 +19,7 @@ metadata:
   namespace: kube-system
 spec:
   interval: 160m
-  url: oci://ghrc.io/containerinfra/charts/kube-secrets-operator-crds
+  url: oci://ghcr.io/containerinfra/charts/kube-secrets-operator-crds
   ref:
     semver: ">= 0.0.0"
 ---
@@ -43,7 +43,7 @@ metadata:
   namespace: kube-system
 spec:
   interval: 160m
-  url: oci://ghrc.io/containerinfra/charts/kube-secrets-operator
+  url: oci://ghcr.io/containerinfra/charts/kube-secrets-operator
   ref:
     semver: ">= 0.0.0"
 ---
