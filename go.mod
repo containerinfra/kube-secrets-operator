@@ -2,7 +2,7 @@ module github.com/containerinfra/kube-secrets-operator
 
 go 1.25.0
 
-toolchain go1.25.3
+toolchain go1.25.4
 
 require (
 	github.com/google/uuid v1.6.0
