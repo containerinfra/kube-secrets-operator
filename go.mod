@@ -8,7 +8,7 @@ require (
 	github.com/onsi/gomega v1.44.0
 	github.com/pkg/errors v0.9.1
 	github.com/sethvargo/go-password v0.3.1
-	github.com/stretchr/testify v1.11.1
+	github.com/stretchr/testify v1.12.1
 	golang.org/x/crypto v0.53.0
 	k8s.io/api v0.36.2
 	k8s.io/apimachinery v0.36.2
